@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>TEAM PROJECT STATUS</title>
+
+    <link rel="stylesheet" href="css/style.css">
+
+</head>
+<body ng-app="teamProjects">
+
+<div class="contentArea">
+    <div class="vr"></div>
+    <div class="mainContent">
+        <ng-view></ng-view>
+    </div>
+</div>
+
+
+<script src="js/socket.io.js"></script>
+<script src="js/jquery.js"></script>
+<script src="js/jquery.nicescroll.min.js"></script>
+<script src="js/angular.min.js"></script>
+<script src="js/angular-route.js"></script>
+<script>
+
+    var isUserLoggedIn = false;
+    var loggedUserName = "";
+    var socket = null;
+
+    const app = angular.module("teamProjects", ["ngRoute"]);
+
+    // Add Routing
+    app.config(function ($routeProvider) {
+        $routeProvider
+            .when("/login", {
+                templateUrl: "tpl/login.html",
+                controller: "loginCtl"
+            })
+            .when("/chat", {
+                templateUrl: "tpl/chat.html",
+                controller: "chatCtl"
+            })
+            .otherwise({
+                redirectTo: '/login'
+            })
+    });
+
+    app.controller("loginCtl", function ($scope, dgMsg, $window, $timeout) {
+        $scope.title = "Enter name to start";
+
+        $("#loginBtn").on("click", function (e) {
+            e.preventDefault();
+            var userName = $("#loginName").val().trim();
+            if (userName <= 0) {
+                dgMsg.showError("Please enter your name.");
+            } else {
+                dgMsg.showSuccess("Please wait...");
+                socket = io();
+                isUserLoggedIn = true;
+                loggedUserName = userName;
+                $window.location.href = "#!/chat";
+            }
+        });
+
+    });
+
+    app.controller("chatCtl", function ($scope, dgMsg, $timeout, $window) {
+
+        if (!isUserLoggedIn) {
+            $window.location.href = "#!/login";
+            return;
+        }
+
+        $scope.title = "Welcome, " + loggedUserName;
+
+        $scope.$on('$viewContentLoaded', function () {
+            $timeout(function () {
+                $(".chatArea").niceScroll();
+            }, 100);
+        });
+
+        $("#sendBtn").on("click", function (e) {
+            e.preventDefault();
+            let chatText = $("#chatText").val().trim();
+            if (chatText.length > 0) {
+
+                if (socket) {
+                    let time = new Date().getTime();
+                    socket.emit("newMessageSent", {
+                        name: loggedUserName,
+                        message: chatText,
+                        createAt: time
+                    });
+                    dgMsg.messageSent({
+                        name: loggedUserName,
+                        message: chatText,
+                        createAt: time
+                    }, "right");
+                    $("#chatText").val("")
+                }
+            }
+        });
+
+        if (socket) {
+            socket.on("newMessageReceived", chat => {
+                dgMsg.messageSent(chat, "left");
+            });
+        };
+
+    });
+
+    app.service("dgMsg", function ($document, $timeout) {
+
+        this.showError = function (text) {
+            $(".dgMsg").empty().html('<div class="errMsg">' + text + '</div>');
+            this.__setAutoTimeout(1000);
+            return true;
+        };
+
+        this.showSuccess = function (text) {
+            $(".dgMsg").empty().html('<div class="successMsg">' + text + '</div>');
+            this.__setAutoTimeout(1000);
+            return true;
+        };
+
+        this.messageSent = function (chat, leftORright) {
+            let html = '<div class="chat ' + leftORright + '"><span class="name">' + chat.name + '</span><span class="content">' + chat.message + '</span></div>';
+            $(html).appendTo(".chatArea");
+        };
+
+        this.__setAutoTimeout = function (time) {
+            $timeout(function () {
+                $(".dgMsg").empty().html("");
+            }, time);
+        };
+
+    });
+
+
+</script>
+
+
+</body>
+</html>
